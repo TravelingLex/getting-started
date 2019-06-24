@@ -9,30 +9,10 @@ terraform {
     shared_credentials_file = "/Users/Alexm/.aws/credentials"
   }
 }
-provider "aws" {
-  region = "us-east-1"
-  shared_credentials_file = "/Users/Alex/.aws/credentials"
-  profile = "personal"
-}
-#resource "aws_instance" "example" {
-#    ami = "${var.web_image_id}" 
-#    instance_type = "t2.micro"
-#    vpc_security_group_ids = ["${aws_security_group.instance.id}"]
 
-#    user_data = <<-EOF
-#                #!/bin/bash
-#                echo "Hello, World" > index.html
-#                nohup busybox httpd -f -p "${var.server_port}" &
-#                EOF
-#
-#
-#    tags{
-#        Name = "terraform-example"
-#    }
-#}
 resource "aws_launch_configuration" "example" {
     image_id = "${var.web_image_id}"
-    instance_type = "t2.micro"
+    instance_type = "${var.instance_type}"
     security_groups = ["${aws_security_group.instance.id}"]
     user_data = "${data.template_file.user_data.rendered}"
 
@@ -47,17 +27,17 @@ resource "aws_autoscaling_group" "example" {
     load_balancers = ["${aws_elb.example.name}"]
     health_check_type = "ELB"
 
-    min_size = 2
-    max_size = 10
+    min_size = "${var.min_size}"
+    max_size = "${var.max_size}"
 
     tag {
         key     = "Name"
-        value   = "terraform-asg-example"
+        value   = "${var.cluster_name}-example"
         propagate_at_launch = true
     }
 }
 resource "aws_elb" "example" {
-    name = "terraform-asg-example"
+    name = "${var.cluster_name}-elb"
     availability_zones = ["${data.aws_availability_zones.all.names}"]
     security_groups = ["${aws_security_group.elb.id}"]
 
@@ -77,7 +57,7 @@ resource "aws_elb" "example" {
     }
 }
 resource "aws_security_group" "instance" {
-  name = "terraform-example-instance"
+  name = "${var.cluster_name}-instance"
 
   ingress{
       from_port = "${var.server_port}"
@@ -87,36 +67,42 @@ resource "aws_security_group" "instance" {
   }
 }
 resource "aws_security_group" "elb" {
-    name = "terraform-example-elb"
+    name = "${var.cluster_name}-elb"
 
-    ingress{
-        from_port = 80
-        to_port = 80
-        protocol = "tcp"
-        cidr_blocks = ["0.0.0.0/0"]
-    }
-
-    egress{
-        from_port = 0
-        to_port = 0
-        protocol = "-1"
-        cidr_blocks = ["0.0.0.0/0"]
-    }
 }
+resource "aws_security_group_rule" "allow_http_inbound" {
+  type = "ingress"
+  security_group_id = "${aws_security_group.elb.id}"
+
+  from_port = 80
+  to_port = 80
+  protocol = "tcp"
+  cidr_blocks = ["0.0.0.0/0"]
+}
+resource "aws_security_group_rule" "allow_all_outbound" {
+  type = "egress"
+  security_group_id = "${aws_security_group.elb.id}"
+
+  from_port = 0
+  to_port = 0
+  protocol = "-1"
+  cidr_blocks = ["0.0.0.0/0"]
+}
+
 data "aws_availability_zones" "all" {}
 data "terraform_remote_state" "db" {
   backend = "s3"
 
   config{
-      bucket = "terraforming-up-and-running-state"
-      key = "stage/data-stores/mysql/terraform.tfstate"
+      bucket = "${var.db_remote_state_bucket}"
+      key = "${var.db_remote_state_key}"
       region = "us-east-1"
       profile = "personal"
       shared_credentials_file = "/Users/Alexm/.aws/credentials"
   }
 }
 data "template_file" "user_data" {
-    template = "${file("user-data.sh")}"
+    template = "${file("${path.module}/user-data.sh")}"
 
     vars {
         server_port = "${var.server_port}"
