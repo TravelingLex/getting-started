@@ -12,7 +12,7 @@ terraform {
 
 provider "aws" {
   region = "us-east-1"
-  shared_credentials_file = "/Users/Alexm/.aws/credentials" 
+  shared_credentials_file = "~/.aws/credentials" 
   profile = "personal" 
 }
 resource "aws_s3_bucket" "terraform_state" {

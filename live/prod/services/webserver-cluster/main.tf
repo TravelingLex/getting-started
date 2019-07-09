@@ -1,14 +1,25 @@
 provider "aws" {
   region = "us-east-1"
-  shared_credentials_file = "/Users/Alexm/.aws/credentials" 
+  shared_credentials_file = "~/.aws/credentials" 
   profile = "personal" 
 }
+terraform {
+  required_version = ">= 0.12, < 0.13"
+  backend "s3"{
+    bucket = "terraforming-up-and-running-state"
+    key = "prod/services/webserver-cluster/terraform.tfstate"
+    region = "us-east-1"
+    dynamodb_table = "terraform-state-lock"
+    profile = "personal"
+    shared_credentials_file = "~/.aws/credentials"
+  }
+}
 module "webserver_cluster" {
-  source = "../../../modules/services/webserver-cluster"
+  source = "git@github.com:TravelingLex/getting-started-modules.git//services/webserver-cluster"
 
   cluster_name = "webservers-prod"
-  db_remote_state_bucket = "${var.db_remote_state_bucket}"
-  db_remote_state_key = "${var.db_remote_state_key}"
+  db_remote_state_bucket = "terraforming-up-and-running-state"
+  db_remote_state_key    = "prod/data-stores/mysql/terraform.tfstate"
 
   instance_type = "m4.large"
   min_size = 2
